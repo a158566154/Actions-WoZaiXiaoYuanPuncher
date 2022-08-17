@@ -1,17 +1,16 @@
 # -*- encoding:utf-8 -*-
-import base64
-import hashlib
-import hmac
+import requests
 import json
 import os
 import time
+import hmac
+import hashlib
+import base64
+import utils
 import urllib
 import urllib.parse
 from urllib.parse import urlencode
-
-import requests
-
-import utils
+from urllib3.util import Retry
 
 
 class WoZaiXiaoYuanPuncher:
@@ -31,24 +30,23 @@ class WoZaiXiaoYuanPuncher:
             "Content-Length": "2",
             "Host": "gw.wozaixiaoyuan.com",
             "Accept-Language": "en-us,en",
-            "Accept": "application/json, text/plain, */*",
+            "Accept": "application/json, text/plain, */*"
         }
         # 请求体（必须有）
         self.body = "{}"
 
     # 登录
     def login(self):
-        username, password = str(os.environ["WZXY_USERNAME"]), str(
-            os.environ["WZXY_PASSWORD"]
-        )
-        url = f"{self.loginUrl}?username={username}&password={password}"
+        username, password = str(os.environ['WZXY_USERNAME']), str(os.environ['WZXY_PASSWORD'])
+        print(username,password)
+        url = f'{self.loginUrl}?username={username}&password={password}'
         self.session = requests.session()
         # 登录
         response = self.session.post(url=url, data=self.body, headers=self.header)
         res = json.loads(response.text)
         if res["code"] == 0:
             print("使用账号信息登录成功")
-            jwsession = response.headers["JWSESSION"]
+            jwsession = response.headers['JWSESSION']
             self.setJwsession(jwsession)
             return True
         else:
@@ -64,61 +62,69 @@ class WoZaiXiaoYuanPuncher:
             print("正在创建cache储存目录与文件...")
             os.mkdir(".cache")
             data = {"jwsession": jwsession}
-        elif not os.path.exists(".cache/cache.json"):
+        elif not os.path.exists(".cache/{}".format(cache_name)):
             print("正在创建cache文件...")
             data = {"jwsession": jwsession}
         # 如果找到cache,读取cache并更新jwsession
         else:
             print("找到cache文件，正在更新cache中的jwsession...")
-            data = utils.processJson(".cache/cache.json").read()
-            data["jwsession"] = jwsession
-        utils.processJson(".cache/cache.json").write(data)
-        self.jwsession = data["jwsession"]
+            data = utils.processJson(".cache/{}".format(cache_name)).read()
+            data['jwsession'] = jwsession
+        utils.processJson(".cache/{}".format(cache_name)).write(data)
+        self.jwsession = data['jwsession']
 
     # 获取JWSESSION
     def getJwsession(self):
         if not self.jwsession:  # 读取cache中的配置文件
-            data = utils.processJson(".cache/cache.json").read()
-            self.jwsession = data["jwsession"]
+            data = utils.processJson(".cache/{}".format(cache_name)).read()
+            self.jwsession = data['jwsession']
         return self.jwsession
 
     # 执行打卡
     def doPunchIn(self):
         print("正在打卡...")
         url = "https://student.wozaixiaoyuan.com/health/save.json"
-        self.header["Host"] = "student.wozaixiaoyuan.com"
-        self.header["Content-Type"] = "application/x-www-form-urlencoded"
-        self.header["JWSESSION"] = self.getJwsession()
-        cur_time = int(round(time.time() * 1000))
+        self.header['Host'] = "student.wozaixiaoyuan.com"
+        self.header['Content-Type'] = "application/x-www-form-urlencoded"
+        self.header['JWSESSION'] = self.getJwsession()
+        # 如果存在全局变量WZXY_ANSWERS，处理传入的Answer
+        if os.environ['WZXY_ANSWERS']:
+            input=os.environ['WZXY_ANSWERS'].strip('[]').split(',')
+            for i in range(len(input)):
+                # %TMP -> 随机温度
+                if input[i] == "%TEM%":
+                    input[i] = utils.getRandomTemperature()
+            ANSWERS=json.dumps(input,ensure_ascii=False,separators=(',',':'))
+        else:
+            ANSWERS='["0","0","0","0"]'
+        sign_time = int(round(time.time() * 1000))  # 13位
+        content = f"{os.environ['WZXY_PROVINCE']}_{sign_time}_{os.environ['WZXY_CITY']}"
+        signature = hashlib.sha256(content.encode('utf-8')).hexdigest()
         sign_data = {
-            "answers": '["0","1","1"]', # 在此自定义answers字段
-            "latitude": os.environ["WZXY_LATITUDE"],
-            "longitude": os.environ["WZXY_LONGITUDE"],
-            "country": os.environ["WZXY_COUNTRY"],
-            "city": os.environ["WZXY_CITY"],
-            "district": os.environ["WZXY_DISTRICT"],
-            "province": os.environ["WZXY_PROVINCE"],
-            "township": os.environ["WZXY_TOWNSHIP"],
-            "street": os.environ["WZXY_STREET"],
-            "areacode": os.environ["WZXY_AREACODE"],
-            "towncode": os.environ["WZXY_TOWNCODE"],
-            "citycode": os.environ["WZXY_CITYCODE"],
-            "timestampHeader": cur_time,
-            "signatureHeader": hashlib.sha256(
-                f"{os.environ['WZXY_PROVINCE']}_{cur_time}_{os.environ['WZXY_CITY']}".encode(
-                    "utf-8"
-                )
-            ).hexdigest(),
+            "answers": ANSWERS,
+            "latitude": os.environ['WZXY_LATITUDE'],
+            "longitude": os.environ['WZXY_LONGITUDE'],
+            "country": os.environ['WZXY_COUNTRY'],
+            "city": os.environ['WZXY_CITY'],
+            "district": os.environ['WZXY_DISTRICT'],
+            "province": os.environ['WZXY_PROVINCE'],
+            "township": os.environ['WZXY_TOWNSHIP'],
+            "street": os.environ['WZXY_STREET'],
+            "areacode": os.environ['WZXY_AREACODE'],
+            "towncode": os.environ['WZXY_TOWNCODE'],
+            "citycode": os.environ['WZXY_CITYCODE'],
+            "timestampHeader": sign_time,
+            "signatureHeader": signature,
         }
         data = urlencode(sign_data)
         self.session = requests.session()
         response = self.session.post(url=url, data=data, headers=self.header)
         response = json.loads(response.text)
-        # 打卡情况
+        # 打卡情况        
         # 如果 jwsession 无效，则重新 登录 + 打卡
-        if response["code"] == -10:
+        if response['code'] == -10:
             print(response)
-            print("jwsession 无效，将尝试使用账号信息重新登录")
+            print('jwsession 无效，将尝试使用账号信息重新登录')
             self.status_code = 4
             loginStatus = self.login()
             if loginStatus:
@@ -129,7 +135,7 @@ class WoZaiXiaoYuanPuncher:
         elif response["code"] == 0:
             self.status_code = 1
             print("打卡成功")
-        elif response["code"] == 1:
+        elif response['code'] == 1:
             print(response)
             print("打卡失败：今日健康打卡已结束")
             self.status_code = 3
@@ -158,35 +164,32 @@ class WoZaiXiaoYuanPuncher:
         notifyTime = utils.getCurrentTime()
         notifyResult = self.getResult()
 
-        if os.environ.get("SCT_KEY"):
+        if os.environ.get('SCT_KEY'):
             # serverchan 推送
-            notifyToken = os.environ["SCT_KEY"]
+            notifyToken = os.environ['SCT_KEY']
             url = "https://sctapi.ftqq.com/{}.send"
             body = {
                 "title": "⏰ 我在校园打卡结果通知",
-                "desp": "打卡项目：健康打卡\n\n打卡情况：{}\n\n打卡时间：{}".format(
-                    notifyResult, notifyTime
-                ),
+                "desp": "打卡项目：健康打卡\n\n打卡情况：{}\n\n打卡时间：{}\n\n打卡账号：{}".format(notifyResult, notifyTime, str(os.environ['WZXY_USERNAME']))
             }
             requests.post(url.format(notifyToken), data=body)
             print("消息已通过 Serverchan-Turbo 推送，请检查推送结果")
         if os.environ.get('PUSHPLUS_TOKEN'):
             # pushplus 推送
-            url = "http://www.pushplus.plus/send"
-            notifyToken = os.environ["PUSHPLUS_TOKEN"]
-            content = json.dumps(
-                {
-                    "打卡项目": "健康打卡",
-                    "打卡情况": notifyResult,
-                    "打卡时间": notifyTime
-                },
-                ensure_ascii=False,
-            )
+            url = 'http://www.pushplus.plus/send'
+            notifyToken = os.environ['PUSHPLUS_TOKEN']
+            dakaname = os.environ['WZXY_USERNAME']
+            content = json.dumps({
+                "打卡项目": "健康打卡",
+                "打卡情况": notifyResult,
+                "打卡时间": notifyTime,
+                "打卡账号": dakaname
+            }, ensure_ascii=False)
             msg = {
                 "token": notifyToken,
                 "title": "⏰ 我在校园打卡结果通知",
                 "content": content,
-                "template": "json",
+                "template": "json"
             }
             body=json.dumps(msg).encode(encoding='utf-8')
             headers = {'Content-Type':'application/json'}
@@ -213,21 +216,17 @@ class WoZaiXiaoYuanPuncher:
             DD_BOT_ACCESS_TOKEN = os.environ["DD_BOT_ACCESS_TOKEN"]
             DD_BOT_SECRET = os.environ["DD_BOT_SECRET"]
             timestamp = str(round(time.time() * 1000))  # 时间戳
-            secret_enc = DD_BOT_SECRET.encode("utf-8")
-            string_to_sign = "{}\n{}".format(timestamp, DD_BOT_SECRET)
-            string_to_sign_enc = string_to_sign.encode("utf-8")
-            hmac_code = hmac.new(
-                secret_enc, string_to_sign_enc, digestmod=hashlib.sha256
-            ).digest()
+            secret_enc = DD_BOT_SECRET.encode('utf-8')
+            string_to_sign = '{}\n{}'.format(timestamp, DD_BOT_SECRET)
+            string_to_sign_enc = string_to_sign.encode('utf-8')
+            hmac_code = hmac.new(secret_enc, string_to_sign_enc, digestmod=hashlib.sha256).digest()
             sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))  # 签名
-            print("开始使用 钉钉机器人 推送消息...", end="")
-            url = f"https://oapi.dingtalk.com/robot/send?access_token={DD_BOT_ACCESS_TOKEN}&timestamp={timestamp}&sign={sign}"
-            headers = {"Content-Type": "application/json;charset=utf-8"}
+            print('开始使用 钉钉机器人 推送消息...', end='')
+            url = f'https://oapi.dingtalk.com/robot/send?access_token={DD_BOT_ACCESS_TOKEN}&timestamp={timestamp}&sign={sign}'
+            headers = {'Content-Type': 'application/json;charset=utf-8'}
             data = {
-                "msgtype": "text",
-                "text": {
-                    "content": f"⏰ 我在校园打卡结果通知\n---------\n打卡项目：健康打卡\n\n打卡情况：{notifyResult}\n\n打卡时间: {notifyTime}"
-                },
+                'msgtype': 'text',
+                'text': {'content': f'⏰ 我在校园打卡结果通知\n---------\n打卡项目：健康打卡\n\n打卡情况：{notifyResult}\n\n打卡时间: {notifyTime}'}
             }
             r = requests.post(url=url, data=json.dumps(data), headers=headers, timeout=15).json()
             if not r['errcode']:
@@ -237,26 +236,25 @@ class WoZaiXiaoYuanPuncher:
                 print('消息经 钉钉机器人 推送失败，请检查错误信息')
         if os.environ.get('BARK_TOKEN'):
             # bark 推送
-            notifyToken = os.environ["BARK_TOKEN"]
+            notifyToken = os.environ['BARK_TOKEN']
             req = "{}/{}/{}".format(notifyToken, "⏰ 我在校园打卡（健康打卡）结果通知", notifyResult)
             requests.get(req)
             print("消息经bark推送成功")
         if os.environ.get("MIAO_CODE"):
             baseurl = "https://miaotixing.com/trigger"
             body = {
-                "id": os.environ["MIAO_CODE"],
-                "text": "打卡项目：健康打卡\n\n打卡情况：{}\n\n打卡时间：{}".format(
-                    notifyResult, notifyTime
-                ),
+                "id": os.environ['MIAO_CODE'],
+                "text": "打卡项目：健康打卡\n\n打卡情况：{}\n\n打卡时间：{}".format(notifyResult, notifyTime)
             }
             requests.post(baseurl, data=body)
             print("消息已通过 喵推送 进行通知，请检查推送结果")
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     # 找不到cache，登录+打卡
+    cache_name = 'cache_' + str(os.environ['WZXY_USERNAME']) + '.json'
     wzxy = WoZaiXiaoYuanPuncher()
-    if not os.path.exists(".cache"):
+    if not os.path.exists(".cache/{}".format(cache_name)):
         print("找不到cache文件，正在使用账号信息登录...")
         loginStatus = wzxy.login()
         if loginStatus:
