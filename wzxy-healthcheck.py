@@ -88,34 +88,41 @@ class WoZaiXiaoYuanPuncher:
         self.header['Content-Type'] = "application/x-www-form-urlencoded"
         self.header['JWSESSION'] = self.getJwsession()
         # 如果存在全局变量WZXY_ANSWERS，处理传入的Answer
-        if os.environ['WZXY_ANSWERS']:
-            input=os.environ['WZXY_ANSWERS'].strip('[]').split(',')
-            for i in range(len(input)):
-                # %TMP -> 随机温度
-                if input[i] == "%TEM%":
-                    input[i] = utils.getRandomTemperature()
-            ANSWERS=json.dumps(input,ensure_ascii=False,separators=(',',':'))
-        else:
-            ANSWERS='["0","0","0","0"]'
-        sign_time = int(round(time.time() * 1000))  # 13位
-        content = f"{os.environ['WZXY_PROVINCE']}_{sign_time}_{os.environ['WZXY_CITY']}"
-        signature = hashlib.sha256(content.encode('utf-8')).hexdigest()
+        # if os.environ['WZXY_ANSWERS']:
+        #     input=os.environ['WZXY_ANSWERS'].strip('[]').split(',')
+        #     for i in range(len(input)):
+        #         # %TMP -> 随机温度
+        #         if input[i] == "%TEM%":
+        #             input[i] = utils.getRandomTemperature()
+        #     ANSWERS=json.dumps(input,ensure_ascii=False,separators=(',',':'))
+        # else:
+        #     ANSWERS='["0","0","0","0"]'
+        #sign_time = int(round(time.time() * 1000))  # 13位
+        #content = f"{os.environ['WZXY_PROVINCE']}_{sign_time}_{os.environ['WZXY_CITY']}"
+        #signature = hashlib.sha256(content.encode('utf-8')).hexdigest()
         sign_data = {
-            "answers": ANSWERS,
-            "latitude": os.environ['WZXY_LATITUDE'],
-            "longitude": os.environ['WZXY_LONGITUDE'],
-            "country": os.environ['WZXY_COUNTRY'],
-            "city": os.environ['WZXY_CITY'],
-            "district": os.environ['WZXY_DISTRICT'],
-            "province": os.environ['WZXY_PROVINCE'],
-            "township": os.environ['WZXY_TOWNSHIP'],
-            "street": os.environ['WZXY_STREET'],
-            "areacode": os.environ['WZXY_AREACODE'],
-            "towncode": os.environ['WZXY_TOWNCODE'],
-            "citycode": os.environ['WZXY_CITYCODE'],
-            "timestampHeader": sign_time,
-            "signatureHeader": signature,
-        }
+            "location": "中国/湖南省/益阳市/赫山区/朝阳街道/团员南路/156/430903/156430900/430903007/",
+            "t1": "[\"无下列情况，身体健康\"]",
+            "t2":"绿色",
+            "t3":"一直在湖南省益阳市内",
+            "type":0,
+            "locationType":0
+        #     "answers": ANSWERS,
+        #     "latitude": os.environ['WZXY_LATITUDE'],
+        #     "longitude": os.environ['WZXY_LONGITUDE'],
+        #     "country": os.environ['WZXY_COUNTRY'],
+        #     "city": os.environ['WZXY_CITY'],
+        #     "district": os.environ['WZXY_DISTRICT'],
+        #     "province": os.environ['WZXY_PROVINCE'],
+        #     "township": os.environ['WZXY_TOWNSHIP'],
+        #     "street": os.environ['WZXY_STREET'],
+        #     "areacode": os.environ['WZXY_AREACODE'],
+        #     "towncode": os.environ['WZXY_TOWNCODE'],
+        #     "citycode": os.environ['WZXY_CITYCODE'],
+        #     "timestampHeader": sign_time,
+        #     "signatureHeader": signature,
+        # 
+         }
         data = urlencode(sign_data)
         self.session = requests.session()
         response = self.session.post(url=url, data=data, headers=self.header)
