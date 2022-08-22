@@ -102,7 +102,7 @@ class WoZaiXiaoYuanPuncher:
         #signature = hashlib.sha256(content.encode('utf-8')).hexdigest()
         sign_data = {
             "location": "中国/湖南省/益阳市/赫山区/朝阳街道/团员南路/156/430903/156430900/430903007/",
-            "t1": os.environ['WZXY_T1'],
+            "t1": os.environ['WZXY_TOWNCODE'],
             "t2":"绿色",
             "t3":"一直在湖南省益阳市内",
             "type":0,
