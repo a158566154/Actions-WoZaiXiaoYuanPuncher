@@ -97,12 +97,12 @@ class WoZaiXiaoYuanPuncher:
         #     ANSWERS=json.dumps(input,ensure_ascii=False,separators=(',',':'))
         # else:
         #     ANSWERS='["0","0","0","0"]'
-        #sign_time = int(round(time.time() * 1000))  # 13位
+        sign_time = int(round(time.time() * 1000))  # 13位
         #content = f"{os.environ['WZXY_PROVINCE']}_{sign_time}_{os.environ['WZXY_CITY']}"
         #signature = hashlib.sha256(content.encode('utf-8')).hexdigest()
         sign_data = {
             "location": "中国/湖南省/益阳市/赫山区/朝阳街道/团员南路/156/430903/156430900/430903007/",
-            "t1": os.environ['t1'],
+            "t1": os.environ['T1'],
             "t2":"绿色",
             "t3":"一直在湖南省益阳市内",
             "type":0,
